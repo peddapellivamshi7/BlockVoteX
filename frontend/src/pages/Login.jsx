@@ -4,18 +4,20 @@ import api from '../services/api';
 import { User, Lock, Fingerprint, Camera, RefreshCw } from 'lucide-react';
 import Webcam from 'react-webcam';
 
+const SCANNER_BASE_URL = (import.meta.env.VITE_SCANNER_URL || 'http://localhost:8081').replace(/\/$/, '');
+
 // --- External Scanner Helper ---
 const captureFingerprintFromDevice = async () => {
     try {
         // Contact the local background service running the SDK
-        const res = await fetch('http://localhost:8081/capture');
+        const res = await fetch(`${SCANNER_BASE_URL}/capture`);
         if (!res.ok) throw new Error("Scanner service not responding");
         const data = await res.json();
         if (data.status !== "success") throw new Error(data.message || "Capture failed");
         return data.fingerprint_template;
     } catch (err) {
         console.error("Scanner Error:", err);
-        throw new Error("Could not connect to external USB Fingerprint Scanner on port 8081.");
+        throw new Error(`Could not connect to external USB Fingerprint Scanner at ${SCANNER_BASE_URL}.`);
     }
 };
 

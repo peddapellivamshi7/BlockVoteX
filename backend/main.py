@@ -7,15 +7,21 @@ from backend.blockchain import Blockchain
 import json
 import base64
 import pandas as pd
+import os
 
 
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
+raw_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+allow_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+if not allow_origins:
+    allow_origins = ["http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,7 +33,7 @@ challenge_store = {}
 
 RP_ID = "localhost"
 RP_NAME = "Secure Vote Blockchain"
-ORIGIN = "http://localhost:5173"
+ORIGIN = os.getenv("FRONTEND_ORIGIN", allow_origins[0])
 
 # --- Models ---
 # --- Models ---

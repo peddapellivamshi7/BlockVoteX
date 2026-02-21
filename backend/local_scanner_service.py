@@ -1,12 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import time
+import os
 
 app = FastAPI()
 
+raw_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+allow_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
+if not allow_origins:
+    allow_origins = ["http://localhost:5173"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,4 +48,4 @@ def capture_fingerprint():
 if __name__ == "__main__":
     import uvicorn
     # Runs on Port 8081 specifically so frontend can call it exclusively for local hardware access
-    uvicorn.run(app, host="127.0.0.1", port=8081)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8081")))
