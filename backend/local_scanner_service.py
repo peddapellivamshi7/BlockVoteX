@@ -5,7 +5,10 @@ import os
 
 app = FastAPI()
 
-raw_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+raw_cors_origins = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173,https://blockvotex.vercel.app"
+).strip()
 allow_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
 if not allow_origins:
     allow_origins = ["http://localhost:5173"]
