@@ -36,13 +36,16 @@ uvicorn backend.main:app --host 0.0.0.0 --port $PORT
 2. Root directory: repository root.
 3. Build command:
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-scanner.txt
 ```
 4. Start command:
 ```bash
 uvicorn backend.local_scanner_service:app --host 0.0.0.0 --port $PORT
 ```
 5. Add scanner `CORS_ORIGINS`.
+
+## Python Runtime Pin
+- This repo includes `runtime.txt` with `python-3.12.8` to avoid Python 3.14 build failures on Render.
 
 ## Deploy Frontend (Vercel)
 1. Import GitHub repo in Vercel.
