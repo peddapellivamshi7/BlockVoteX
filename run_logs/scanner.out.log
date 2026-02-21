@@ -1,0 +1,16 @@
+INFO:     127.0.0.1:8354 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11785 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:11785 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7360 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:1500 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:8566 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7064 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:4732 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:6820 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7935 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7958 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:7820 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14217 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2782 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:2862 - "GET /capture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:14477 - "GET /capture HTTP/1.1" 200 OK
