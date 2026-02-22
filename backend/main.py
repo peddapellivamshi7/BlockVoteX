@@ -36,18 +36,11 @@ conn = db.init_db()
 blockchain = Blockchain(conn)
 challenge_store = {}
 
-from urllib.parse import urlparse
+import os
 
-def get_best_origin(origins):
-    for origin in origins:
-        if "localhost" not in origin and "127.0.0.1" not in origin:
-            return origin
-    return origins[0] if origins else "http://localhost:5173"
-
-FRONTEND_URL = os.getenv("FRONTEND_ORIGIN", get_best_origin(allow_origins))
-ORIGIN = FRONTEND_URL
-parsed_url = urlparse(FRONTEND_URL)
-RP_ID = os.getenv("RP_ID", parsed_url.hostname or "localhost")
+RP_ID = os.getenv("RP_ID", "blockvotex.vercel.app")
+ORIGIN = os.getenv("ORIGIN", "https://blockvotex.vercel.app")
+FRONTEND_URL = ORIGIN
 RP_NAME = os.getenv("RP_NAME", "Secure Vote Blockchain")
 
 # --- Models ---
