@@ -614,9 +614,10 @@ def get_chain():
 def get_logs():
     return pd.read_sql("SELECT * FROM logs ORDER BY timestamp DESC", conn).to_dict(orient="records")
 
-
-
-
-
-    
-
+@app.get("/debug/reset")
+def debug_reset():
+    c = conn.cursor()
+    c.execute("DELETE FROM registered_users")
+    c.execute("DELETE FROM webauthn_credentials")
+    conn.commit()
+    return {"status": "Database cleared! You can now register with your face again."}
