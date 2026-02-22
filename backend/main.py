@@ -36,9 +36,12 @@ conn = db.init_db()
 blockchain = Blockchain(conn)
 challenge_store = {}
 
-RP_ID = "localhost"
-RP_NAME = "Secure Vote Blockchain"
-ORIGIN = os.getenv("FRONTEND_ORIGIN", allow_origins[0])
+from urllib.parse import urlparse
+FRONTEND_URL = os.getenv("FRONTEND_ORIGIN", allow_origins[0] if allow_origins else "http://localhost:5173")
+ORIGIN = FRONTEND_URL
+parsed_url = urlparse(FRONTEND_URL)
+RP_ID = os.getenv("RP_ID", parsed_url.hostname or "localhost")
+RP_NAME = os.getenv("RP_NAME", "Secure Vote Blockchain")
 
 # --- Models ---
 # --- Models ---
