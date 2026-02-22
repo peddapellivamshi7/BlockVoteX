@@ -588,8 +588,16 @@ def control_election(data: ElectionControl):
 
     val = '1' if data.action == "start" else '0'
     c.execute("UPDATE election_config SET value=? WHERE key='is_active'", (val,))
-    conn.commit()
-    return {"status": "updated", "active": val == '1'}
+@app.get("/debug/env")
+def debug_env():
+    return {
+        "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "not set"),
+        "allow_origins": allow_origins,
+        "FRONTEND_URL": FRONTEND_URL,
+        "RP_ID": RP_ID,
+        "ORIGIN": ORIGIN,
+    }
+
 
 @app.get("/stats")
 def get_stats():
