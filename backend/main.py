@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException, Request, Body
 from pydantic import BaseModel
 from typing import Optional, List
-import database as db
-import auth as auth
-from blockchain import Blockchain
+try:
+    from backend import database as db
+    from backend import auth as auth
+    from backend.blockchain import Blockchain
+except ModuleNotFoundError:
+    import database as db
+    import auth as auth
+    from blockchain import Blockchain
 import json
 import base64
 import pandas as pd
