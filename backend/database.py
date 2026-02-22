@@ -44,6 +44,16 @@ def init_db():
                     has_voted BOOLEAN DEFAULT 0
                 )''')
 
+    # WebAuthn Credentials
+    c.execute('''CREATE TABLE IF NOT EXISTS webauthn_credentials (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT,
+                    credential_id TEXT UNIQUE,
+                    public_key BLOB,
+                    sign_count INTEGER,
+                    FOREIGN KEY(user_id) REFERENCES registered_users(voter_id)
+                )''')
+
     # 4. Blockchain (Votes)
     c.execute('''CREATE TABLE IF NOT EXISTS blockchain (
                     index_id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -1,25 +1,10 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api, { loginOptions, loginVerify, registerOptions, registerVerify } from '../services/api';
 import { User, Lock, Fingerprint, Camera, RefreshCw } from 'lucide-react';
 import Webcam from 'react-webcam';
 
-const SCANNER_BASE_URL = (import.meta.env.VITE_SCANNER_URL || 'http://localhost:8081').replace(/\/$/, '');
-
-// --- External Scanner Helper ---
-const captureFingerprintFromDevice = async () => {
-    try {
-        // Contact the local background service running the SDK
-        const res = await fetch(`${SCANNER_BASE_URL}/capture`);
-        if (!res.ok) throw new Error("Scanner service not responding");
-        const data = await res.json();
-        if (data.status !== "success") throw new Error(data.message || "Capture failed");
-        return data.fingerprint_template;
-    } catch (err) {
-        console.error("Scanner Error:", err);
-        throw new Error(`Could not connect to external USB Fingerprint Scanner at ${SCANNER_BASE_URL}.`);
-    }
-};
+import { startRegistration, startAuthentication } from '@simplewebauthn/browser';
 
 export default function Login() {
     const [isLogin, setIsLogin] = useState(true);
@@ -49,21 +34,37 @@ export default function Login() {
         try {
             setError('');
 
-            // 1. Trigger Local USB Scanner Capture
-            const fingerprintTemplate = await captureFingerprintFromDevice();
+            // 1. Get WebAuthn Registration Options from Server
+            const { data: options } = await registerOptions({
+                voter_id: formData.voter_id,
+                aadhaar: formData.aadhaar
+            });
 
-            // 2. Send Face + Scanner Template + Aadhaar
-            await api.post('/auth/register/verify', {
+            // 2. Trigger Device Biometrics Sensor
+            let registrationResponse;
+            try {
+                registrationResponse = await startRegistration(options);
+            } catch (authErr) {
+                console.error("WebAuthn Error:", authErr);
+                if (authErr.name === 'NotAllowedError') {
+                    throw new Error("Biometric capture was canceled or denied.");
+                }
+                throw new Error("Your device does not support WebAuthn or biometrics failed.");
+            }
+
+            // 3. Send Face + WebAuthn Response + Aadhaar to Server
+            await registerVerify({
                 voter_id: formData.voter_id,
                 aadhaar: formData.aadhaar,
                 face_image: faceImage,
-                fingerprint_template: fingerprintTemplate
+                registration_response: registrationResponse
             });
 
-            alert('Registration Successful! External Device Fingerprint Saved.');
+            alert('Registration Successful! Device Biometrics Saved.');
             setIsLogin(true);
             setFaceImage(null);
         } catch (err) {
+            console.error('Registration failed:', err);
             setError(err.response?.data?.detail || err.message || 'Registration Failed');
         }
     };
@@ -76,15 +77,30 @@ export default function Login() {
             setError('');
             if (!faceImage) { setError("Please capture your face!"); return; }
 
-            // 1. Trigger Local USB Scanner Capture
-            const fingerprintTemplate = await captureFingerprintFromDevice();
+            // 1. Get WebAuthn Login Options from Server
+            const { data: options } = await loginOptions({
+                voter_id: formData.voter_id,
+                aadhaar: formData.aadhaar
+            });
 
-            // 2. Verify Face + Scanner Template + Aadhaar against Server
-            const res = await api.post('/auth/login/verify', {
+            // 2. Trigger Device Biometrics Sensor
+            let authenticationResponse;
+            try {
+                authenticationResponse = await startAuthentication(options);
+            } catch (authErr) {
+                console.error("WebAuthn Error:", authErr);
+                if (authErr.name === 'NotAllowedError') {
+                    throw new Error("Biometric verification was canceled.");
+                }
+                throw new Error("Biometric authentication failed or is not supported.");
+            }
+
+            // 3. Verify Face + WebAuthn Response against Server
+            const res = await loginVerify({
                 voter_id: formData.voter_id,
                 aadhaar: formData.aadhaar,
                 face_image: faceImage,
-                fingerprint_template: fingerprintTemplate
+                authentication_response: authenticationResponse
             });
 
             const user = res.data.user;
@@ -95,6 +111,7 @@ export default function Login() {
             else navigate('/voter');
 
         } catch (err) {
+            console.error('Login failed:', err);
             setError(err.response?.data?.detail || err.message || 'Login Failed');
         }
     };

@@ -9,11 +9,14 @@ const api = axios.create({
     },
 });
 
-export const login = (data) => api.post('/auth/login/verify', data);
-export const register = (data) => api.post('/auth/register/verify', data);
+export const loginOptions = (data) => api.post('/auth/webauthn/login/generate-options', data);
+export const loginVerify = (data) => api.post('/auth/webauthn/login/verify', data);
+export const registerOptions = (data) => api.post('/auth/webauthn/register/generate-options', data);
+export const registerVerify = (data) => api.post('/auth/webauthn/register/verify', data);
 export const getElectionStatus = () => api.get('/election/status');
 export const controlElection = (data) => api.post('/election/control', data);
-export const castVote = (data) => api.post('/vote', data);
+export const voteOptions = (data) => api.post('/vote/generate-options', data);
+export const voteVerify = (data) => api.post('/vote/verify', data);
 export const getStats = () => api.get('/stats');
 export const getBlockchain = () => api.get('/blockchain');
 export const getLogs = () => api.get('/logs');

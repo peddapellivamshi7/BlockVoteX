@@ -1,25 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
-import api from '../services/api';
+import api, { voteOptions, voteVerify } from '../services/api';
 import { useNavigate } from 'react-router-dom';
 import { LogOut, CheckCircle, Vote, Fingerprint, Camera, RefreshCw, Lock } from 'lucide-react';
 import Webcam from 'react-webcam';
 import UserProfile from '../components/UserProfile';
 
-const SCANNER_BASE_URL = (import.meta.env.VITE_SCANNER_URL || 'http://localhost:8081').replace(/\/$/, '');
-
-// --- External Scanner Helper ---
-const captureFingerprintFromDevice = async () => {
-    try {
-        const res = await fetch(`${SCANNER_BASE_URL}/capture`);
-        if (!res.ok) throw new Error("Scanner service not responding");
-        const data = await res.json();
-        if (data.status !== "success") throw new Error(data.message || "Capture failed");
-        return data.fingerprint_template;
-    } catch (err) {
-        console.error("Scanner Error:", err);
-        throw new Error(`Could not connect to external USB Fingerprint Scanner at ${SCANNER_BASE_URL}.`);
-    }
-};
+import { startAuthentication } from '@simplewebauthn/browser';
 
 export default function VoterDashboard() {
     const [user, setUser] = useState(JSON.parse(localStorage.getItem('user')));
@@ -37,11 +23,15 @@ export default function VoterDashboard() {
         if (!user) { navigate('/login'); return; }
 
         // 1. Check Election Status
-        api.get('/election/status').then(res => setIsActive(res.data.active));
+        api.getElectionStatus().then(res => setIsActive(res.data.active));
 
         // 2. Fetch Candidates for District
-        api.get(`/representatives/${user.district}`)
-            .then(res => setCandidates(res.data))
+        api.getRepresentatives(user.district)
+            .then(res => {
+                // Fix the fact that earlier api calls fetch single district from global all districts url
+                const districtCandidates = res.data.filter(c => c.district_id === user.district);
+                setCandidates(districtCandidates.length > 0 ? districtCandidates : res.data);
+            })
             .catch(err => console.error("Failed to load candidates", err));
 
     }, []);
@@ -67,16 +57,31 @@ export default function VoterDashboard() {
             const candidate = candidates.find(c => c.representative_id === selectedParty);
             if (!candidate) return;
 
-            // 1. Trigger Local USB Scanner Capture to Sign the Vote
-            const fingerprintTemplate = await captureFingerprintFromDevice();
+            // 1. Get WebAuthn Login Options from Server
+            const { data: options } = await voteOptions({
+                voter_id: user.voter_id,
+                aadhaar: user.aadhaar_masked || "" // Note: Masked aadhaar is what is stored locally, backend uses voter_id to verify
+            });
 
-            // 2. Send Exact Face + Scanner Template to backend
-            const res = await api.post('/vote', {
+            // 2. Trigger Device Biometrics Sensor
+            let authenticationResponse;
+            try {
+                authenticationResponse = await startAuthentication(options);
+            } catch (authErr) {
+                console.error("WebAuthn Error:", authErr);
+                if (authErr.name === 'NotAllowedError') {
+                    throw new Error("Biometric verification was canceled.");
+                }
+                throw new Error("Biometric authentication failed or is not supported.");
+            }
+
+            // 3. Send Exact Face + WebAuthn Response to backend
+            const res = await voteVerify({
                 voter_id: user.voter_id,
                 district_id: user.district,
                 party_id: candidate.party_name, // Backend expects party_id (names acting as IDs for now)
                 face_image: faceImage,
-                fingerprint_template: fingerprintTemplate
+                authentication_response: authenticationResponse
             });
 
             if (res.data.status === 'success') {
@@ -84,6 +89,7 @@ export default function VoterDashboard() {
             }
 
         } catch (err) {
+            console.error("Voting failed:", err);
             setError(err.response?.data?.detail || err.message || 'Voting Failed');
         }
     };

@@ -1,9 +1,9 @@
 from fastapi import FastAPI, HTTPException, Request, Body
 from pydantic import BaseModel
 from typing import Optional, List
-import backend.database as db
-import backend.auth as auth
-from backend.blockchain import Blockchain
+import database as db
+import auth as auth
+from blockchain import Blockchain
 import json
 import base64
 import pandas as pd
@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
-raw_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").strip()
+raw_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174").strip()
 allow_origins = [origin.strip() for origin in raw_cors_origins.split(",") if origin.strip()]
 if not allow_origins:
     allow_origins = ["http://localhost:5173"]
@@ -71,6 +71,10 @@ class Representative(BaseModel):
     party_symbol: str
     district_id: str
 
+from webauthn import generate_registration_options, verify_registration_response, generate_authentication_options, verify_authentication_response
+from webauthn.helpers.structs import RegistrationCredential, AuthenticationCredential, AuthenticatorSelectionCriteria, AuthenticatorAttachment, UserVerificationRequirement, ResidentKeyRequirement
+from webauthn.helpers.options_to_json import options_to_json
+
 class AdminCreateUser(BaseModel):
     admin_id: str
     aadhaar: str
@@ -81,6 +85,33 @@ class AdminCreateUser(BaseModel):
     role: str
     password: Optional[str] = None
 
+class WebAuthnRegistrationOptionsRequest(BaseModel):
+    voter_id: str
+    aadhaar: str
+
+class WebAuthnRegistrationVerifyRequest(BaseModel):
+    voter_id: str
+    aadhaar: str
+    face_image: str  # Base64
+    registration_response: dict
+    
+class WebAuthnLoginOptionsRequest(BaseModel):
+    voter_id: str
+    aadhaar: str
+
+class WebAuthnLoginVerifyRequest(BaseModel):
+    voter_id: str
+    aadhaar: str
+    face_image: str  # Base64
+    authentication_response: dict
+
+class WebAuthnVoteRequest(BaseModel):
+    voter_id: str
+    district_id: str
+    party_id: str
+    face_image: str  # Base64
+    authentication_response: dict
+
 # --- Endpoints ---
 
 @app.get("/")
@@ -89,62 +120,149 @@ def read_root():
 
 # --- Registration ---
 
-@app.post("/auth/register/verify")
-def verify_reg(data: RegistrationResponse):
+@app.post("/auth/webauthn/register/generate-options")
+def webauthn_register_options(data: WebAuthnRegistrationOptionsRequest):
+    c = conn.cursor()
     voter_id = data.voter_id
 
+    # 1. Verify Voter ID and Aadhaar in Master DB
+    c.execute("SELECT district_id, role, first_name, last_name, aadhaar FROM master_users WHERE voter_id=? AND aadhaar=?", (voter_id, data.aadhaar))
+    master_row = c.fetchone()
+    if not master_row:
+         raise HTTPException(status_code=401, detail="Invalid Voter Credentials")
+
+    district_id, role, first_name, last_name, stored_aadhaar = master_row
+
+    # 2. Check if already registered
+    c.execute("SELECT * FROM registered_users WHERE voter_id=?", (voter_id,))
+    if c.fetchone():
+         raise HTTPException(status_code=409, detail="Voter already registered!")
+
+    # 3. Generate Options
+    options = generate_registration_options(
+        rp_id=RP_ID,
+        rp_name=RP_NAME,
+        user_id=voter_id.encode(),
+        user_name=voter_id,
+        user_display_name=f"{first_name} {last_name}",
+        authenticator_selection=AuthenticatorSelectionCriteria(
+            authenticator_attachment=AuthenticatorAttachment.PLATFORM,
+            user_verification=UserVerificationRequirement.REQUIRED,
+            resident_key=ResidentKeyRequirement.PREFERRED
+        )
+    )
+
+    challenge_store[voter_id] = options.challenge
+
+    return json.loads(options_to_json(options))
+
+
+@app.post("/auth/webauthn/register/verify")
+def webauthn_register_verify(data: WebAuthnRegistrationVerifyRequest):
+    voter_id = data.voter_id
+    c = conn.cursor()
+
+    # 1. Verify Voter ID and Aadhaar in Master DB
+    c.execute("SELECT district_id, role FROM master_users WHERE voter_id=? AND aadhaar=?", (voter_id, data.aadhaar))
+    master_row = c.fetchone()
+    if not master_row:
+         raise HTTPException(status_code=401, detail="Invalid Voter Credentials")
+         
+    district_id, role = master_row
+
+    # 2. Check if already registered
+    c.execute("SELECT * FROM registered_users WHERE voter_id=?", (voter_id,))
+    if c.fetchone():
+         raise HTTPException(status_code=409, detail="Voter already registered!")
+
+    expected_challenge = challenge_store.get(voter_id)
+    if not expected_challenge:
+        raise HTTPException(status_code=400, detail="Challenge missing or expired")
+
+    # 3. Hash Face (Secure DeepFace Embedding)
+    face_hash = auth.extract_face_embedding(data.face_image)
+    if not face_hash:
+        raise HTTPException(status_code=400, detail="Invalid Face Data")
+
+    c.execute("SELECT face_hash FROM registered_users")
+    all_faces = [row[0] for row in c.fetchall()]
+    if auth.check_duplicate_face(face_hash, all_faces):
+         raise HTTPException(status_code=409, detail="Face already registered to another user!")
+
+    # 4. Verify WebAuthn Registration Response
+    import traceback
     try:
-        c = conn.cursor()
-        
-        # 1. MASTER RULE: Verify Voter ID and Aadhaar in Master DB
-        c.execute("SELECT district_id, role FROM master_users WHERE voter_id=? AND aadhaar=?", (voter_id, data.aadhaar))
-        master_row = c.fetchone()
-        if not master_row:
-             raise HTTPException(status_code=401, detail="Invalid Voter Credentials")
-        
-        district_id, role = master_row
-
-        # 2. Hash Face (Secure DeepFace Embedding)
-        face_hash = auth.extract_face_embedding(data.face_image)
-        if not face_hash:
-            raise HTTPException(status_code=400, detail="Invalid Face Data")
-            
-        # 3. Hash Fingerprint Template (SHA256 from local external scanner)
-        fingerprint_hash = auth.hash_data(data.fingerprint_template)
-            
-        # 4. Check Duplicates in Registered DB
-        c.execute("SELECT * FROM registered_users WHERE voter_id=?", (voter_id,))
-        if c.fetchone():
-             raise HTTPException(status_code=409, detail="Voter already registered!")
-
-        c.execute("SELECT face_hash FROM registered_users")
-        all_faces = [row[0] for row in c.fetchall()]
-        if auth.check_duplicate_face(face_hash, all_faces):
-             raise HTTPException(status_code=409, detail="Face already registered to another user!")
-
-        c.execute("SELECT * FROM registered_users WHERE fingerprint_hash=?", (fingerprint_hash,))
-        if c.fetchone():
-             raise HTTPException(status_code=409, detail="Fingerprint device already registered to another user!")
-
-        # 5. Store Data
-        c.execute('''INSERT INTO registered_users 
-                     (voter_id, aadhaar_number, district_id, role, face_hash, fingerprint_hash, has_voted) 
-                     VALUES (?, ?, ?, ?, ?, ?, 0)''', 
-                 (voter_id, data.aadhaar, district_id, role, face_hash, fingerprint_hash))
-        conn.commit()
-        return {"status": "registered", "verified": True}
-        
-    except HTTPException:
-        raise
+        from webauthn.helpers import parse_registration_credential_json
+        credential = parse_registration_credential_json(data.registration_response)
+        verification = verify_registration_response(
+            credential=credential,
+            expected_challenge=expected_challenge,
+            expected_rp_id=RP_ID,
+            expected_origin=allow_origins,
+        )
     except Exception as e:
-        print(e)
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"WebAuthn verification failed: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=400, detail=f"WebAuthn verification failed: {str(e)}")
+    finally:
+        # Clean up challenge
+        if voter_id in challenge_store:
+            del challenge_store[voter_id]
+
+    # 5. Store Data
+    c.execute('''INSERT INTO registered_users 
+                 (voter_id, aadhaar_number, district_id, role, face_hash, fingerprint_hash, has_voted) 
+                 VALUES (?, ?, ?, ?, ?, ?, 0)''', 
+             (voter_id, data.aadhaar, district_id, role, face_hash, "WEBAUTHN")) # dummy hash placeholder
+             
+    c.execute('''INSERT INTO webauthn_credentials
+                 (user_id, credential_id, public_key, sign_count)
+                 VALUES (?, ?, ?, ?)''',
+             (voter_id, verification.credential_id.hex(), verification.credential_public_key, verification.sign_count))
+             
+    conn.commit()
+    return {"status": "registered", "verified": True}
 
 
 # --- Login ---
 
-@app.post("/auth/login/verify")
-def verify_login(data: AuthResponse):
+@app.post("/auth/webauthn/login/generate-options")
+def webauthn_login_options(data: WebAuthnLoginOptionsRequest):
+    c = conn.cursor()
+    voter_id = data.voter_id
+    
+    # Verify User exists in Master DB
+    c.execute("SELECT 1 FROM master_users WHERE voter_id=? AND aadhaar=?", (voter_id, data.aadhaar))
+    if not c.fetchone():
+        raise HTTPException(status_code=401, detail="Invalid Voter Credentials")
+
+    # Fetch Registered Credentials
+    c.execute("SELECT credential_id FROM webauthn_credentials WHERE user_id=?", (voter_id,))
+    credentials = c.fetchall()
+    
+    if not credentials:
+        raise HTTPException(status_code=400, detail="Device not registered. Please Register first.")
+
+    from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+    allow_credentials = []
+    for cred in credentials:
+        allow_credentials.append(PublicKeyCredentialDescriptor(
+            id=bytes.fromhex(cred[0])
+        ))
+
+    options = generate_authentication_options(
+        rp_id=RP_ID,
+        allow_credentials=allow_credentials,
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+
+    challenge_store[voter_id] = options.challenge
+
+    return json.loads(options_to_json(options))
+
+
+@app.post("/auth/webauthn/login/verify")
+def webauthn_login_verify(data: WebAuthnLoginVerifyRequest):
     c = conn.cursor()
     voter_id = data.voter_id
     
@@ -157,21 +275,54 @@ def verify_login(data: AuthResponse):
     district_id, role, first_name, last_name, stored_aadhaar = master_row
     
     # 2. Fetch Stored Hashes
-    c.execute("SELECT face_hash, fingerprint_hash FROM registered_users WHERE voter_id=?", (voter_id,))
+    c.execute("SELECT face_hash FROM registered_users WHERE voter_id=?", (voter_id,))
     reg_row = c.fetchone()
     if not reg_row:
         raise HTTPException(status_code=400, detail="Biometrics not found. Please Register first.")
     
-    stored_face_hash, stored_fingerprint_hash = reg_row
+    stored_face_hash = reg_row[0]
     
     # 3. Verify Face Data (Secure DeepFace Threshold)
     if not auth.verify_face(stored_face_hash, data.face_image):
         raise HTTPException(status_code=401, detail="Face Verification Failed - Does not match registered biometric")
 
-    # 4. Verify Fingerprint Template against stored hash
-    input_fingerprint_hash = auth.hash_data(data.fingerprint_template)
-    if stored_fingerprint_hash != input_fingerprint_hash:
-        raise HTTPException(status_code=401, detail="Fingerprint Verification Failed")
+    # 4. Verify WebAuthn Authentication Response
+    expected_challenge = challenge_store.get(voter_id)
+    if not expected_challenge:
+        raise HTTPException(status_code=400, detail="Challenge missing or expired")
+
+    try:
+        from webauthn.helpers import parse_authentication_credential_json
+        credential = parse_authentication_credential_json(data.authentication_response)
+        
+        c.execute("SELECT public_key, sign_count FROM webauthn_credentials WHERE credential_id=?", (credential.raw_id.hex(),))
+        cred_row = c.fetchone()
+        if not cred_row:
+            raise HTTPException(status_code=400, detail="Unregistered WebAuthn credential")
+            
+        stored_public_key, stored_sign_count = cred_row
+
+        verification = verify_authentication_response(
+            credential=credential,
+            expected_challenge=expected_challenge,
+            expected_rp_id=RP_ID,
+            expected_origin=allow_origins,
+            credential_public_key=stored_public_key,
+            credential_current_sign_count=stored_sign_count,
+            require_user_verification=True
+        )
+        
+        # Update sign count
+        c.execute("UPDATE webauthn_credentials SET sign_count=? WHERE credential_id=?", (verification.new_sign_count, credential.id))
+        conn.commit()
+    except Exception as e:
+        print(f"WebAuthn verification failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=401, detail=f"Hardware Biometric Verification Failed: {str(e)}")
+    finally:
+        if voter_id in challenge_store:
+            del challenge_store[voter_id]
 
     return {
         "status": "success", 
@@ -187,8 +338,13 @@ def verify_login(data: AuthResponse):
 
 # --- Vote ---
 
-@app.post("/vote")
-def cast_vote(vote: VoteCast):
+@app.post("/vote/generate-options")
+def webauthn_vote_options(data: WebAuthnLoginOptionsRequest):
+    # Voting uses the exact same WebAuthn options generation as login
+    return webauthn_login_options(data)
+
+@app.post("/vote/verify")
+def webauthn_cast_vote(vote: WebAuthnVoteRequest):
     c = conn.cursor()
     
     # 1. Election Active?
@@ -197,7 +353,7 @@ def cast_vote(vote: VoteCast):
         raise HTTPException(status_code=400, detail="Election Closed")
 
     # 2. Already Voted?
-    c.execute("SELECT has_voted, face_hash, fingerprint_hash FROM registered_users WHERE voter_id=?", (vote.voter_id,))
+    c.execute("SELECT has_voted, face_hash FROM registered_users WHERE voter_id=?", (vote.voter_id,))
     user_row = c.fetchone()
     if not user_row:
         raise HTTPException(status_code=400, detail="Voter not registered")
@@ -211,13 +367,43 @@ def cast_vote(vote: VoteCast):
         conn.commit()
         raise HTTPException(status_code=401, detail="Face Verification Failed - Does not match registered biometric")
 
-    # 4. Verify Fingerprint Template against stored hash
-    input_fingerprint_hash = auth.hash_data(vote.fingerprint_template)
-    if user_row[2] != input_fingerprint_hash:
+    # 4. Verify WebAuthn
+    expected_challenge = challenge_store.get(vote.voter_id)
+    if not expected_challenge:
+        raise HTTPException(status_code=400, detail="Challenge missing or expired")
+
+    try:
+        from webauthn.helpers import parse_authentication_credential_json
+        credential = parse_authentication_credential_json(vote.authentication_response)
+        
+        c.execute("SELECT public_key, sign_count FROM webauthn_credentials WHERE credential_id=?", (credential.raw_id.hex(),))
+        cred_row = c.fetchone()
+        if not cred_row:
+            raise Exception("Unregistered WebAuthn credential")
+            
+        stored_public_key, stored_sign_count = cred_row
+
+        verification = verify_authentication_response(
+            credential=credential,
+            expected_challenge=expected_challenge,
+            expected_rp_id=RP_ID,
+            expected_origin=allow_origins,
+            credential_public_key=stored_public_key,
+            credential_current_sign_count=stored_sign_count,
+            require_user_verification=True
+        )
+        
+        c.execute("UPDATE webauthn_credentials SET sign_count=? WHERE credential_id=?", (verification.new_sign_count, credential.id))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         c.execute("INSERT INTO logs (event_type, description, user_id) VALUES (?, ?, ?)", 
-                 ("FRAUD_Attempt", f"Fingerprint verification failed during vote for {vote.voter_id}", vote.voter_id))
+                 ("FRAUD_Attempt", f"Hardware biometric verification failed during vote for {vote.voter_id}: {str(e)}", vote.voter_id))
         conn.commit()
-        raise HTTPException(status_code=401, detail="Fingerprint Verification Failed")
+        raise HTTPException(status_code=401, detail=f"Hardware Biometric Verification Failed: {str(e)}")
+    finally:
+        if vote.voter_id in challenge_store:
+            del challenge_store[vote.voter_id]
 
     # 5. Add Block
     new_block = blockchain.add_vote(vote.voter_id, vote.district_id, vote.party_id)
