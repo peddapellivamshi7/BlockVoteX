@@ -25,9 +25,9 @@ export default function LandingPage() {
                         </div>
                         <div className="flex flex-col border-l-2 border-gray-300 pl-3 md:pl-4">
                             <h1 className="text-xl md:text-2xl font-bold flex gap-1">
-                                <span className="text-[#f08c3a]">Voters'</span>
-                                <span className="text-[#143250]">Services</span>
-                                <span className="text-pink-500">Portal</span>
+                                <span className="text-[#f08c3a]">Block</span>
+                                <span className="text-[#143250]">Vote</span>
+                                <span className="text-pink-500">X</span>
                             </h1>
                             <p className="text-[10px] md:text-xs text-gray-500 font-semibold tracking-widest mt-0.5 uppercase">ELECTION COMMISSION OF INDIA</p>
                         </div>

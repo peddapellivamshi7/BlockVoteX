@@ -85,9 +85,9 @@ export default function Login() {
                         <img src="/banner.png" alt="ECI Logo" className="w-full h-full object-cover scale-150" />
                     </div>
                     <h1 className="text-2xl font-black flex justify-center gap-1">
-                        <span className="text-[#f08c3a]">Voters'</span>
-                        <span className="text-[#143250]">Services</span>
-                        <span className="text-pink-500">Portal</span>
+                        <span className="text-[#f08c3a]">Block</span>
+                        <span className="text-[#143250]">Vote</span>
+                        <span className="text-pink-500">X</span>
                     </h1>
                     <p className="text-gray-500 mt-2 font-medium">Election Commission of India</p>
                 </div>
