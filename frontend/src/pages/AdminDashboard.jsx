@@ -69,7 +69,7 @@ export default function AdminDashboard() {
                             <img src="/banner.png" alt="ECI Logo" className="w-full h-full object-cover scale-150" />
                         </div>
                         <div className="flex flex-col border-l-2 border-gray-300 pl-3 md:pl-4">
-                            <h1 className="text-xl md:text-2xl font-bold flex gap-1">
+                            <h1 className="text-xl md:text-2xl font-bold flex gap-0">
                                 <span className="text-[#f08c3a]">Block</span>
                                 <span className="text-[#143250]">Vote</span>
                                 <span className="text-pink-500">X</span>

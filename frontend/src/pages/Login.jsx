@@ -84,7 +84,7 @@ export default function Login() {
                     <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center bg-white rounded-full p-0.5 shadow-md overflow-hidden border border-gray-100">
                         <img src="/banner.png" alt="ECI Logo" className="w-full h-full object-cover scale-150" />
                     </div>
-                    <h1 className="text-2xl font-black flex justify-center gap-1">
+                    <h1 className="text-2xl font-black flex justify-center gap-0">
                         <span className="text-[#f08c3a]">Block</span>
                         <span className="text-[#143250]">Vote</span>
                         <span className="text-pink-500">X</span>
