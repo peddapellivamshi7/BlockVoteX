@@ -17,15 +17,20 @@ export const getElectionStatus = () => api.get('/election/status');
 export const controlElection = (data) => api.post('/election/control', data);
 export const voteOptions = (data) => api.post('/vote/generate-options', data);
 export const voteVerify = (data) => api.post('/vote/verify', data);
+export const generateOtp = (data) => api.post('/auth/generate-otp', data);
 export const getStats = () => api.get('/stats');
 export const getBlockchain = () => api.get('/blockchain');
 export const getLogs = () => api.get('/logs');
 export const getRepresentatives = () => api.get('/representatives');
+export const getRepresentativesByDistrict = (districtId) => api.get(`/representatives/${districtId}`);
 export const addRepresentative = (data) => api.post('/representatives', data);
 export const deleteRepresentative = (id) => api.delete(`/representatives/${id}`);
 export const getManagedUsers = (adminId) => api.get('/admin/users', { params: { admin_id: adminId } });
 export const addManagedUser = (data) => api.post('/admin/users', data);
 export const deleteManagedUser = (adminId, voterId) =>
     api.delete(`/admin/users/${voterId}`, { params: { admin_id: adminId } });
+export const syncDataset = (adminId) => api.post('/admin/sync-dataset', null, { params: { admin_id: adminId } });
+export const getVoterStatus = (identifier, requesterId) =>
+    api.get(`/admin/voter-status/${identifier}`, { params: { requester_id: requesterId } });
 
 export default api;

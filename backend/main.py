@@ -1,6 +1,14 @@
-from fastapi import FastAPI, HTTPException, Request, Body
+import json
+import base64
+import os
+import random
+import pandas as pd
 from pydantic import BaseModel
 from typing import Optional, List
+from fastapi import FastAPI, HTTPException, Request, Body
+from fastapi.middleware.cors import CORSMiddleware
+
+
 try:
     from backend import database as db
     from backend import auth as auth
@@ -9,13 +17,6 @@ except ModuleNotFoundError:
     import database as db
     import auth as auth
     from blockchain import Blockchain
-import json
-import base64
-import pandas as pd
-import os
-
-
-from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
 
@@ -36,12 +37,12 @@ conn = db.init_db()
 blockchain = Blockchain(conn)
 challenge_store = {}
 
-import os
-
-RP_ID = os.getenv("RP_ID", "blockvotex.vercel.app")
-ORIGIN = os.getenv("ORIGIN", "https://blockvotex.vercel.app")
+RP_ID = os.getenv("RP_ID", "localhost")
+ORIGIN = os.getenv("ORIGIN", "http://localhost:5173")
 FRONTEND_URL = ORIGIN
-RP_NAME = os.getenv("RP_NAME", "Secure Vote Blockchain")
+RP_NAME = os.getenv("RP_NAME", "Secure Vote Local")
+
+otp_store = {}
 
 # --- Models ---
 # --- Models ---
@@ -119,6 +120,10 @@ class WebAuthnVoteRequest(BaseModel):
     party_id: str
     face_image: str  # Base64
     authentication_response: dict
+    otp: str
+
+class OTPRequest(BaseModel):
+    voter_id: str
 
 # --- Endpoints ---
 
@@ -221,7 +226,7 @@ def webauthn_register_verify(data: WebAuthnRegistrationVerifyRequest):
     c.execute('''INSERT INTO registered_users 
                  (voter_id, aadhaar_number, district_id, role, face_hash, fingerprint_hash, has_voted) 
                  VALUES (?, ?, ?, ?, ?, ?, 0)''', 
-             (voter_id, data.aadhaar, district_id, role, face_hash, "WEBAUTHN")) # dummy hash placeholder
+             (voter_id, data.aadhaar, district_id, role, face_hash, verification.credential_id.hex()))
              
     c.execute('''INSERT INTO webauthn_credentials
                  (user_id, credential_id, public_key, sign_count)
@@ -275,12 +280,12 @@ def webauthn_login_verify(data: WebAuthnLoginVerifyRequest):
     voter_id = data.voter_id
     
     # 1. Verify Voter ID and Aadhaar in Master DB
-    c.execute("SELECT district_id, role, first_name, last_name, aadhaar FROM master_users WHERE voter_id=? AND aadhaar=?", (voter_id, data.aadhaar))
+    c.execute("SELECT district_id, role, first_name, last_name, aadhaar, mother_name, father_name, sex, birthday, age, phone FROM master_users WHERE voter_id=? AND aadhaar=?", (voter_id, data.aadhaar))
     master_row = c.fetchone()
     if not master_row:
         raise HTTPException(status_code=401, detail="Invalid Voter Credentials")
     
-    district_id, role, first_name, last_name, stored_aadhaar = master_row
+    district_id, role, first_name, last_name, stored_aadhaar, mother_name, father_name, sex, birthday, age, phone = master_row
     
     # 2. Fetch Stored Hashes
     c.execute("SELECT face_hash FROM registered_users WHERE voter_id=?", (voter_id,))
@@ -339,7 +344,13 @@ def webauthn_login_verify(data: WebAuthnLoginVerifyRequest):
             "district": district_id,
             "role": role,
             "name": f"{first_name} {last_name}",
-            "aadhaar_masked": f"XXXX-XXXX-{stored_aadhaar[-4:]}"
+            "aadhaar_masked": f"XXXX-XXXX-{stored_aadhaar[-4:]}",
+            "mother_name": mother_name,
+            "father_name": father_name,
+            "sex": sex,
+            "birthday": birthday,
+            "age": age,
+            "phone": phone
         }
     }
 
@@ -348,8 +359,43 @@ def webauthn_login_verify(data: WebAuthnLoginVerifyRequest):
 
 @app.post("/vote/generate-options")
 def webauthn_vote_options(data: WebAuthnLoginOptionsRequest):
-    # Voting uses the exact same WebAuthn options generation as login
-    return webauthn_login_options(data)
+    c = conn.cursor()
+    voter_id = data.voter_id
+    
+    # Voting options generation bypasses strict Aadhaar matching since frontend only has masked Aadhaar. 
+    # The actual security relies on Face + WebAuthn + OTP which are verified subsequently.
+    c.execute("SELECT credential_id FROM webauthn_credentials WHERE user_id=?", (voter_id,))
+    credentials = c.fetchall()
+    
+    if not credentials:
+        raise HTTPException(status_code=400, detail="Device not registered. Please Register first.")
+
+    from webauthn.helpers.structs import PublicKeyCredentialDescriptor
+    allow_credentials = []
+    for cred in credentials:
+        allow_credentials.append(PublicKeyCredentialDescriptor(
+            id=bytes.fromhex(cred[0])
+        ))
+
+    options = generate_authentication_options(
+        rp_id=RP_ID,
+        allow_credentials=allow_credentials,
+        user_verification=UserVerificationRequirement.REQUIRED,
+    )
+
+    challenge_store[voter_id] = options.challenge
+
+    return json.loads(options_to_json(options))
+
+@app.post("/auth/generate-otp")
+def generate_otp(data: OTPRequest):
+    # 1. Generate 6-digit random OTP
+    otp = str(random.randint(100000, 999999))
+    # 2. Store OTP temporarily in memory for verification
+    otp_store[data.voter_id] = otp
+    # 3. In a real system, send this via SMS (Twilio) or Email
+    print(f"\n\n[SIMULATED SMS] OTP for {data.voter_id} is: {otp}\n\n")
+    return {"message": "OTP generated and sent to console"}
 
 @app.post("/vote/verify")
 def webauthn_cast_vote(vote: WebAuthnVoteRequest):
@@ -374,6 +420,12 @@ def webauthn_cast_vote(vote: WebAuthnVoteRequest):
                  ("FRAUD_Attempt", f"Face verification failed during vote for {vote.voter_id}", vote.voter_id))
         conn.commit()
         raise HTTPException(status_code=401, detail="Face Verification Failed - Does not match registered biometric")
+
+    # 3.5 Verify 2FA OTP
+    expected_otp = otp_store.get(vote.voter_id)
+    if not expected_otp or expected_otp != vote.otp:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP code")
+    del otp_store[vote.voter_id] # Clear OTP after success
 
     # 4. Verify WebAuthn
     expected_challenge = challenge_store.get(vote.voter_id)
@@ -414,7 +466,7 @@ def webauthn_cast_vote(vote: WebAuthnVoteRequest):
             del challenge_store[vote.voter_id]
 
     # 5. Add Block
-    new_block = blockchain.add_vote(vote.voter_id, vote.district_id, vote.party_id)
+    new_block = blockchain.add_vote(vote.district_id, vote.party_id)
     c.execute("UPDATE registered_users SET has_voted=1 WHERE voter_id=?", (vote.voter_id,))
     conn.commit()
     
@@ -581,6 +633,68 @@ def control_election(data: ElectionControl):
 
     val = '1' if data.action == "start" else '0'
     c.execute("UPDATE election_config SET value=? WHERE key='is_active'", (val,))
+    conn.commit()
+    return {"status": "success", "action": data.action}
+
+@app.get("/admin/voter-status/{identifier}")
+def get_voter_status(identifier: str, requester_id: str):
+    c = conn.cursor()
+    # Security check: Requester must be Admin or Auditor
+    c.execute("SELECT role FROM master_users WHERE voter_id=?", (requester_id,))
+    row = c.fetchone()
+    if not row or row[0] not in {"Admin", "Auditor"}:
+        raise HTTPException(status_code=403, detail="Unauthorized access to voter status.")
+
+    # Search in master_users by Voter ID or Aadhaar
+    c.execute(
+        "SELECT first_name, last_name, district_id, voter_id, aadhaar, role, mother_name, father_name, sex, birthday, age, phone FROM master_users WHERE voter_id=? OR aadhaar=?",
+        (identifier, identifier)
+    )
+    master = c.fetchone()
+    if not master:
+        raise HTTPException(status_code=404, detail="Voter not found in master dataset.")
+
+    first_name, last_name, district_id, m_voter_id, stored_aadhaar, role, mother_name, father_name, sex, birthday, age, phone = master
+    
+    # Check registration and voting status in registered_users
+    c.execute(
+        "SELECT has_voted, face_hash FROM registered_users WHERE voter_id=?",
+        (m_voter_id,)
+    )
+    reg = c.fetchone()
+    
+    is_registered = reg is not None
+    has_voted = reg[0] == 1 if reg else False
+    
+    return {
+        "voter_id": m_voter_id,
+        "name": f"{first_name} {last_name}".strip(),
+        "district": district_id,
+        "aadhaar_masked": f"XXXX-XXXX-{stored_aadhaar[-4:]}" if stored_aadhaar else "N/A",
+        "role": role,
+        "mother_name": mother_name,
+        "father_name": father_name,
+        "sex": sex,
+        "birthday": birthday,
+        "age": age,
+        "phone": phone,
+        "is_registered": is_registered,
+        "has_voted": has_voted,
+        "status": "Voted" if has_voted else ("Registered" if is_registered else "Not Registered")
+    }
+
+@app.post("/admin/sync-dataset")
+def sync_dataset(admin_id: str):
+    c = conn.cursor()
+    c.execute("SELECT role FROM master_users WHERE voter_id=?", (admin_id,))
+    admin_row = c.fetchone()
+    if not admin_row or admin_row[0] != "Admin":
+        raise HTTPException(status_code=403, detail="Only Admin can sync the dataset.")
+
+    if db.sync_master_from_csv(conn):
+        return {"status": "success", "message": "Master dataset synchronized from CSV."}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to sync dataset from CSV. Check if backend/voters_dataset.csv exists.")
 @app.get("/debug/env")
 def debug_env():
     return {

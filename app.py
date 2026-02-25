@@ -6,7 +6,7 @@ from backend.blockchain import Blockchain
 import time
 
 # --- SETUP ---
-st.set_page_config(page_title="Secure Voting System", layout="wide", page_icon="🗳")
+st.set_page_config(page_title="BlockVoteX", layout="wide", page_icon="🗳")
 
 if 'db_conn' not in st.session_state:
     st.session_state.db_conn = db.init_db()

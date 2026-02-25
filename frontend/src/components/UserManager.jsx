@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../services/api';
-import { UserPlus, Users, Trash2 } from 'lucide-react';
+import { UserPlus, Users, Trash2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 
 export default function UserManager({ adminId }) {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [syncing, setSyncing] = useState(false);
     const [message, setMessage] = useState('');
     const [error, setError] = useState('');
     const [newUser, setNewUser] = useState({
@@ -31,6 +32,21 @@ export default function UserManager({ adminId }) {
             setError(e.response?.data?.detail || 'Failed to fetch users');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleSync = async () => {
+        setSyncing(true);
+        setError('');
+        setMessage('');
+        try {
+            const res = await api.syncDataset(adminId);
+            setMessage(res.data.message);
+            fetchUsers();
+        } catch (e) {
+            setError(e.response?.data?.detail || 'Failed to sync dataset');
+        } finally {
+            setSyncing(false);
         }
     };
 
@@ -76,82 +92,157 @@ export default function UserManager({ adminId }) {
     };
 
     return (
-        <div className="bg-slate-800 p-6 rounded-xl border border-emerald-500/30 shadow-lg mt-8">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2 mb-6">
-                <Users className="text-emerald-500" /> Manage Voters & Auditors
-            </h2>
+        <div className="space-y-6">
+            {/* Header & Sync Action */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                        <Users size={24} />
+                    </div>
+                    <div>
+                        <h2 className="text-xl font-black text-[#143250]">User & Auditor Management</h2>
+                        <p className="text-sm text-gray-500 font-medium">Manage eligible voters and system auditors</p>
+                    </div>
+                </div>
+                <button
+                    onClick={handleSync}
+                    disabled={syncing}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-sm ${syncing
+                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-md active:scale-95'
+                        }`}
+                >
+                    <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
+                    {syncing ? 'Syncing...' : 'Refresh from Dataset'}
+                </button>
+            </div>
 
-            {message && <div className="mb-4 text-sm text-emerald-300 bg-emerald-500/10 border border-emerald-500/30 p-3 rounded">{message}</div>}
-            {error && <div className="mb-4 text-sm text-red-300 bg-red-500/10 border border-red-500/30 p-3 rounded">{error}</div>}
+            {/* Status Messages */}
+            {message && (
+                <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-100 text-emerald-700 rounded-xl animate-in fade-in zoom-in-95 duration-300">
+                    <CheckCircle2 size={18} />
+                    <span className="text-sm font-bold">{message}</span>
+                </div>
+            )}
+            {error && (
+                <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 text-red-700 rounded-xl animate-in fade-in zoom-in-95 duration-300">
+                    <AlertCircle size={18} />
+                    <span className="text-sm font-bold">{error}</span>
+                </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-1 bg-slate-900 p-4 rounded-lg border border-slate-700 h-fit">
-                    <h3 className="font-bold text-slate-300 mb-4 flex items-center gap-2">
-                        <UserPlus size={18} className="text-emerald-500" /> Add User
+                {/* Add User Form */}
+                <div className="lg:col-span-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 h-fit">
+                    <h3 className="text-lg font-bold text-[#143250] mb-6 flex items-center gap-2">
+                        <UserPlus size={20} className="text-emerald-500" /> Manual Entry
                     </h3>
-                    <form onSubmit={handleSubmit} className="space-y-3">
-                        <input type="text" name="first_name" placeholder="First Name" value={newUser.first_name} onChange={handleChange} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm" />
-                        <input type="text" name="last_name" placeholder="Last Name" value={newUser.last_name} onChange={handleChange} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm" />
-                        <input type="text" name="aadhaar" placeholder="Aadhaar (12 digits)" value={newUser.aadhaar} onChange={handleChange} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm" />
-                        <input type="text" name="district_id" placeholder="District ID (e.g. 234)" value={newUser.district_id} onChange={handleChange} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm" />
-                        <input type="text" name="voter_id" placeholder="Voter ID (AAA999999)" value={newUser.voter_id} onChange={handleChange} required className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm uppercase" />
-                        <select name="role" value={newUser.role} onChange={handleChange} className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm">
-                            <option value="Voter">Voter</option>
-                            <option value="Auditor">Auditor</option>
-                        </select>
-                        <input type="text" name="password" placeholder="Password (optional)" value={newUser.password} onChange={handleChange} className="w-full bg-slate-800 border border-slate-600 rounded p-2 text-white text-sm" />
-                        <button type="submit" className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2 rounded transition">
-                            Create User
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-black text-gray-400 uppercase ml-1">First Name</label>
+                                <input type="text" name="first_name" placeholder="Akash" value={newUser.first_name} onChange={handleChange} required className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-black text-gray-400 uppercase ml-1">Last Name</label>
+                                <input type="text" name="last_name" placeholder="Singh" value={newUser.last_name} onChange={handleChange} required className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none" />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-black text-gray-400 uppercase ml-1">Aadhaar (12 digits)</label>
+                            <input type="text" name="aadhaar" placeholder="123456789012" value={newUser.aadhaar} onChange={handleChange} required className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-black text-gray-400 uppercase ml-1">District ID</label>
+                                <input type="text" name="district_id" placeholder="234" value={newUser.district_id} onChange={handleChange} required className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none" />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-black text-gray-400 uppercase ml-1">Role</label>
+                                <select name="role" value={newUser.role} onChange={handleChange} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none appearance-none cursor-pointer">
+                                    <option value="Voter">Voter</option>
+                                    <option value="Auditor">Auditor</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-xs font-black text-gray-400 uppercase ml-1">Voter ID</label>
+                            <input type="text" name="voter_id" placeholder="AAA999999" value={newUser.voter_id} onChange={handleChange} required className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none uppercase" />
+                        </div>
+                        <button type="submit" className="w-full bg-[#143250] hover:bg-[#1f4a9b] text-white font-black py-4 rounded-xl transition-all shadow-md active:scale-95 mt-2">
+                            Add to Master List
                         </button>
                     </form>
                 </div>
 
-                <div className="lg:col-span-2 overflow-x-auto">
-                    {loading ? (
-                        <p className="text-slate-400">Loading users...</p>
-                    ) : (
-                        <table className="w-full text-left text-sm">
-                            <thead>
-                                <tr className="text-slate-400 border-b border-slate-700">
-                                    <th className="p-2">ID</th>
-                                    <th className="p-2">Name</th>
-                                    <th className="p-2">Role</th>
-                                    <th className="p-2">District</th>
-                                    <th className="p-2">Voter ID</th>
-                                    <th className="p-2">Aadhaar</th>
-                                    <th className="p-2">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {users.map((u) => (
-                                    <tr key={u.id} className="border-b border-slate-700/50 hover:bg-slate-700/30 transition">
-                                        <td className="p-2 text-slate-300">{u.id}</td>
-                                        <td className="p-2 text-white">{u.first_name} {u.last_name}</td>
-                                        <td className="p-2 text-blue-300">{u.role}</td>
-                                        <td className="p-2 text-green-400 font-bold">{u.district_id}</td>
-                                        <td className="p-2 text-slate-200">{u.voter_id}</td>
-                                        <td className="p-2 text-slate-400">{u.aadhaar}</td>
-                                        <td className="p-2">
-                                            <button
-                                                onClick={() => handleDelete(u.voter_id)}
-                                                className="text-red-400 hover:text-red-300 p-1 rounded hover:bg-red-400/10 transition"
-                                                title="Delete user"
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
+                {/* User Table */}
+                <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                    <h3 className="text-lg font-bold text-[#143250] mb-6 flex items-center gap-2">
+                        <List size={20} className="text-blue-500" /> Authorized User List
+                    </h3>
+                    <div className="overflow-x-auto">
+                        {loading ? (
+                            <div className="py-12 flex flex-col items-center gap-3">
+                                <RefreshCw className="animate-spin text-blue-500" size={32} />
+                                <p className="text-gray-400 font-bold">Loading users...</p>
+                            </div>
+                        ) : (
+                            <table className="w-full text-left text-sm border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-400 font-black uppercase text-[10px] tracking-widest border-b border-gray-100">
+                                        <th className="px-4 py-3">Details</th>
+                                        <th className="px-4 py-3">Role</th>
+                                        <th className="px-4 py-3">District</th>
+                                        <th className="px-4 py-3">Aadhaar</th>
+                                        <th className="px-4 py-3 text-right">Action</th>
                                     </tr>
-                                ))}
-                                {users.length === 0 && (
-                                    <tr>
-                                        <td colSpan="7" className="p-4 text-center text-slate-500">No voter/auditor records found.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    )}
+                                </thead>
+                                <tbody>
+                                    {users.map((u) => (
+                                        <tr key={u.id} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors group">
+                                            <td className="px-4 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-[#143250]">{u.first_name} {u.last_name}</span>
+                                                    <span className="text-[10px] font-black text-gray-400 tracking-tighter uppercase">{u.voter_id}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-4">
+                                                <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tight ${u.role === 'Admin' ? 'bg-purple-50 text-purple-600' :
+                                                        u.role === 'Auditor' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+                                                    }`}>
+                                                    {u.role}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-4 font-black text-gray-500">{u.district_id}</td>
+                                            <td className="px-4 py-4 font-mono text-gray-400">XXXX-XXXX-{u.aadhaar.slice(-4)}</td>
+                                            <td className="px-4 py-4 text-right">
+                                                <button
+                                                    onClick={() => handleDelete(u.voter_id)}
+                                                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                                                    title="Delete user"
+                                                >
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                    {users.length === 0 && (
+                                        <tr>
+                                            <td colSpan="5" className="px-4 py-12 text-center text-gray-400 font-bold">
+                                                No eligible voter/auditor records found.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
     );
 }
+
+// Dummy List icon if not imported
+import { List as ListIcon } from 'lucide-react';
+const List = ListIcon;
