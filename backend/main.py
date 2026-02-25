@@ -37,8 +37,8 @@ conn = db.init_db()
 blockchain = Blockchain(conn)
 challenge_store = {}
 
-RP_ID = os.getenv("RP_ID", "localhost")
-ORIGIN = os.getenv("ORIGIN", "http://localhost:5173")
+RP_ID = os.getenv("RP_ID", "blockvotex.vercel.app")
+ORIGIN = os.getenv("ORIGIN", "https://blockvotex.vercel.app")
 FRONTEND_URL = ORIGIN
 RP_NAME = os.getenv("RP_NAME", "Secure Vote Local")
 
