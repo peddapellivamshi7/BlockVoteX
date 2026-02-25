@@ -211,7 +211,7 @@ def webauthn_register_verify(data: WebAuthnRegistrationVerifyRequest):
             credential=credential,
             expected_challenge=expected_challenge,
             expected_rp_id=RP_ID,
-            expected_origin=allow_origins,
+            expected_origin=ORIGIN,
         )
     except Exception as e:
         print(f"WebAuthn verification failed: {e}")
@@ -319,7 +319,7 @@ def webauthn_login_verify(data: WebAuthnLoginVerifyRequest):
             credential=credential,
             expected_challenge=expected_challenge,
             expected_rp_id=RP_ID,
-            expected_origin=allow_origins,
+            expected_origin=ORIGIN,
             credential_public_key=stored_public_key,
             credential_current_sign_count=stored_sign_count,
             require_user_verification=True
@@ -447,7 +447,7 @@ def webauthn_cast_vote(vote: WebAuthnVoteRequest):
             credential=credential,
             expected_challenge=expected_challenge,
             expected_rp_id=RP_ID,
-            expected_origin=allow_origins,
+            expected_origin=ORIGIN,
             credential_public_key=stored_public_key,
             credential_current_sign_count=stored_sign_count,
             require_user_verification=True
