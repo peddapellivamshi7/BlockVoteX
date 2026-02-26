@@ -238,6 +238,33 @@ def init_db():
                 )''')
 
     conn.commit()
+
+    # --- Schema Auto-Upgrade Block ---
+    # Add new columns to master_users if they do not exist
+    try:
+        new_columns = [
+            ("mother_name", "TEXT"),
+            ("father_name", "TEXT"),
+            ("sex", "TEXT"),
+            ("birthday", "TEXT"),
+            ("age", "INTEGER"),
+            ("phone", "TEXT")
+        ]
+        
+        c.execute("PRAGMA table_info(master_users)")
+        existing_cols = [row[1] for row in c.fetchall()]
+
+        for col_name, col_type in new_columns:
+            if col_name not in existing_cols:
+                try:
+                    c.execute(f"ALTER TABLE master_users ADD COLUMN {col_name} {col_type}")
+                except Exception as alter_err:
+                    print(f"Warning: Could not auto-add column {col_name}: {alter_err}")
+                    
+        conn.commit()
+    except Exception as e:
+        print(f"Schema auto-patch failed: {e}")
+    # --- End Schema Auto-Upgrade Block ---
     
     # Sync from CSV if available
     csv_synced = sync_master_from_csv(conn)

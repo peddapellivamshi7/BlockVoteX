@@ -40,7 +40,7 @@ challenge_store = {}
 RP_ID = os.getenv("RP_ID", "blockvotex.vercel.app")
 ORIGIN = os.getenv("ORIGIN", "https://blockvotex.vercel.app")
 FRONTEND_URL = ORIGIN
-RP_NAME = os.getenv("RP_NAME", "Secure Vote Local")
+RP_NAME = os.getenv("RP_NAME", "BlockVoteX ECI")
 
 otp_store = {}
 
@@ -161,7 +161,7 @@ def webauthn_register_options(data: WebAuthnRegistrationOptionsRequest):
         authenticator_selection=AuthenticatorSelectionCriteria(
             authenticator_attachment=AuthenticatorAttachment.PLATFORM,
             user_verification=UserVerificationRequirement.REQUIRED,
-            resident_key=ResidentKeyRequirement.PREFERRED
+            resident_key=ResidentKeyRequirement.REQUIRED
         )
     )
 
