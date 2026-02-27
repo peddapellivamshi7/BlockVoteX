@@ -12,6 +12,8 @@ run_logs/
 *.db
 *.sqlite
 *.sqlite3
+*.csv
+voter_dataset.csv
 
 # Local env files
 .env
