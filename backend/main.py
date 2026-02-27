@@ -968,9 +968,17 @@ def get_logs():
     return pd.read_sql("SELECT * FROM logs ORDER BY timestamp DESC", conn).to_dict(orient="records")
 
 @app.get("/debug/reset")
-def debug_reset():
+def debug_reset(admin_id: str = None):
+    if not admin_id:
+        raise HTTPException(status_code=401, detail="Admin ID required to reset database. Example: /debug/reset?admin_id=VOTER123")
+        
     c = conn.cursor()
+    c.execute("SELECT role FROM master_users WHERE voter_id=?", (admin_id,))
+    admin_row = c.fetchone()
+    if not admin_row or admin_row[0] != "Admin":
+        raise HTTPException(status_code=403, detail="Unauthorized. Only Admins can reset the database.")
+        
     c.execute("DELETE FROM registered_users")
     c.execute("DELETE FROM webauthn_credentials")
     conn.commit()
-    return {"status": "Database cleared! You can now register with your face again."}
+    return {"status": f"Database cleared by {admin_id}! You can now register with your face again."}
