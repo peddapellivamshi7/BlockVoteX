@@ -1,17 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../services/api';
-import { ShieldAlert, LogOut, Play, Square, Activity, Vote, Settings, Users, BarChart3, List as ListIcon, Search } from 'lucide-react';
+import { ShieldAlert, LogOut, Play, Square, Activity, Vote, Settings, Users, BarChart3, List as ListIcon, Search, Trophy, Map, Bell, Database } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RepresentativeManager from '../components/RepresentativeManager';
 import UserProfile from '../components/UserProfile';
 import UserManager from '../components/UserManager';
 import VoterStatusCheck from '../components/VoterStatusCheck';
+import ConstituencyManager from '../components/ConstituencyManager';
+import NotificationManager from '../components/NotificationManager';
+import AuditTrail from '../components/AuditTrail';
 
 const List = ListIcon;
 
 export default function AdminDashboard() {
     const [user] = useState(() => JSON.parse(localStorage.getItem('user') || '{}'));
     const [stats, setStats] = useState(null);
+    const [logs, setLogs] = useState([]);
     const [isActive, setIsActive] = useState(false);
     const [activeSection, setActiveSection] = useState(null);
     const navigate = useNavigate();
@@ -30,6 +34,8 @@ export default function AdminDashboard() {
         try {
             const s = await api.getStats();
             setStats(s.data);
+            const l = await api.getLogs();
+            setLogs(l.data);
         } catch (e) {
             console.error(e);
         }
@@ -99,7 +105,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 space-y-8">
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4 md:gap-6">
                     <button onClick={() => setActiveSection('profile')} className={`p-4 md:p-6 rounded-2xl shadow-sm border transition-all duration-300 hover:scale-105 hover:shadow-md group flex flex-col items-center gap-3 ${activeSection === 'profile' ? 'bg-white ring-2 ring-blue-500 border-blue-100 shadow-md' : 'bg-white border-gray-100'}`}>
                         <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-colors ${activeSection === 'profile' ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white'}`}>
                             <ShieldAlert size={20} />
@@ -147,6 +153,36 @@ export default function AdminDashboard() {
                         <div className="text-center">
                             <h3 className="font-black text-[#143250] text-sm md:text-base">Voter Status</h3>
                             <p className="hidden md:block text-[10px] text-gray-500 font-medium tracking-tight">Search profiles</p>
+                        </div>
+                    </button>
+
+                    <button onClick={() => setActiveSection('constituencies')} className={`p-4 md:p-6 rounded-2xl shadow-sm border transition-all duration-300 hover:scale-105 hover:shadow-md group flex flex-col items-center gap-3 ${activeSection === 'constituencies' ? 'bg-white ring-2 ring-indigo-500 border-indigo-100 shadow-md' : 'bg-white border-gray-100'}`}>
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-colors ${activeSection === 'constituencies' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white'}`}>
+                            <Map size={20} />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="font-black text-[#143250] text-sm md:text-base">Constituencies</h3>
+                            <p className="hidden md:block text-[10px] text-gray-500 font-medium tracking-tight">Manage districts</p>
+                        </div>
+                    </button>
+
+                    <button onClick={() => setActiveSection('notifications')} className={`p-4 md:p-6 rounded-2xl shadow-sm border transition-all duration-300 hover:scale-105 hover:shadow-md group flex flex-col items-center gap-3 ${activeSection === 'notifications' ? 'bg-white ring-2 ring-red-500 border-red-100 shadow-md' : 'bg-white border-gray-100'}`}>
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-colors ${activeSection === 'notifications' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 group-hover:bg-red-600 group-hover:text-white'}`}>
+                            <Bell size={20} />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="font-black text-[#143250] text-sm md:text-base">Alerts</h3>
+                            <p className="hidden md:block text-[10px] text-gray-500 font-medium tracking-tight">Broadcast messages</p>
+                        </div>
+                    </button>
+
+                    <button onClick={() => setActiveSection('audit')} className={`p-4 md:p-6 rounded-2xl shadow-sm border transition-all duration-300 hover:scale-105 hover:shadow-md group flex flex-col items-center gap-3 ${activeSection === 'audit' ? 'bg-white ring-2 ring-slate-500 border-slate-100 shadow-md' : 'bg-white border-gray-100'}`}>
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-colors ${activeSection === 'audit' ? 'bg-slate-600 text-white' : 'bg-slate-50 text-slate-600 group-hover:bg-slate-600 group-hover:text-white'}`}>
+                            <Database size={20} />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="font-black text-[#143250] text-sm md:text-base">Audit Logs</h3>
+                            <p className="hidden md:block text-[10px] text-gray-500 font-medium tracking-tight">System ledger</p>
                         </div>
                     </button>
                 </div>
@@ -197,21 +233,131 @@ export default function AdminDashboard() {
                                             <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
                                                 <BarChart3 size={20} className="text-blue-400" /> Quick Stats
                                             </h2>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
                                                 <div className="bg-white/10 p-4 rounded-xl">
-                                                    <p className="text-xs text-blue-200 uppercase font-black">Total Registered</p>
-                                                    <p className="text-2xl font-bold">{stats?.total_users || 0}</p>
+                                                    <p className="text-xs text-blue-200 uppercase font-black mb-1">Total Registered</p>
+                                                    <p className="text-3xl font-black">{stats?.total_users || 0}</p>
                                                 </div>
                                                 <div className="bg-white/10 p-4 rounded-xl">
-                                                    <p className="text-xs text-orange-200 uppercase font-black">Total Votes Cast</p>
-                                                    <p className="text-2xl font-bold">{stats?.voted_users || 0}</p>
+                                                    <p className="text-xs text-orange-200 uppercase font-black mb-1">Total Votes Cast</p>
+                                                    <p className="text-3xl font-black">{stats?.voted_users || 0}</p>
                                                 </div>
                                             </div>
+
+                                            {/* Demographics Area */}
+                                            {stats?.demographics && (
+                                                <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                    <div className="bg-[#1a3d66] p-4 rounded-xl border border-white/5">
+                                                        <h3 className="text-xs text-emerald-300 uppercase font-black mb-3">Participation by Gender</h3>
+                                                        <div className="space-y-2">
+                                                            {stats.demographics.gender.map(g => (
+                                                                <div key={g.label} className="text-sm">
+                                                                    <div className="flex justify-between mb-1 text-gray-300 font-bold">
+                                                                        <span>{g.label}</span>
+                                                                        <span>{g.value}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-white/10 rounded-full h-1.5">
+                                                                        <div className="bg-emerald-400 h-1.5 rounded-full" style={{ width: `${(g.value / (stats?.voted_users || 1)) * 100}%` }}></div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="bg-[#1a3d66] p-4 rounded-xl border border-white/5">
+                                                        <h3 className="text-xs text-amber-300 uppercase font-black mb-3">Participation by Age</h3>
+                                                        <div className="space-y-2">
+                                                            {stats.demographics.age.map(a => (
+                                                                <div key={a.label} className="text-sm">
+                                                                    <div className="flex justify-between mb-1 text-gray-300 font-bold">
+                                                                        <span>{a.label}</span>
+                                                                        <span>{a.value}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-white/10 rounded-full h-1.5">
+                                                                        <div className="bg-amber-400 h-1.5 rounded-full" style={{ width: `${(a.value / (stats?.voted_users || 1)) * 100}%` }}></div>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="absolute -right-4 -bottom-4 text-white/5 rotate-12">
                                             <Settings size={120} />
                                         </div>
                                     </div>
+
+                                    {/* Live Security Alerts */}
+                                    {logs && logs.filter(l => l.event_type === 'FRAUD_Attempt' || l.event_type === 'BULK_VOTE_ANOMALY').length > 0 && (
+                                        <div className="bg-red-50 border border-red-100 p-6 rounded-2xl shadow-sm mt-6">
+                                            <h2 className="text-lg font-bold text-red-700 mb-4 flex items-center gap-2">
+                                                <ShieldAlert size={20} /> Live Security Alerts
+                                            </h2>
+                                            <div className="space-y-3">
+                                                {logs.filter(l => l.event_type === 'FRAUD_Attempt' || l.event_type === 'BULK_VOTE_ANOMALY').slice(0, 5).map((log, idx) => (
+                                                    <div key={idx} className="bg-white p-3 rounded-xl border border-red-100 flex items-start gap-4">
+                                                        <div className="mt-1">
+                                                            {log.event_type === 'BULK_VOTE_ANOMALY' ? <Activity size={18} className="text-orange-500" /> : <ShieldAlert size={18} className="text-red-500" />}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <span className="font-bold text-red-900 text-sm">{log.event_type}</span>
+                                                                <span className="text-xs font-bold text-gray-400">
+                                                                    {new Date(log.timestamp).toLocaleTimeString()}
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-xs text-gray-600 font-medium leading-relaxed">{log.description}</p>
+                                                            <p className="text-xs font-bold text-gray-400 mt-1">User Entity: {log.user_id}</p>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Election Results Table (Only Visible When Stopped) */}
+                                    {!isActive && (
+                                        <div className="bg-white mt-6 p-6 rounded-2xl shadow-sm border border-gray-100">
+                                            <h2 className="text-lg font-bold text-[#143250] mb-4 flex items-center gap-2">
+                                                <Trophy className="text-amber-500" size={20} /> District Leaders
+                                            </h2>
+
+                                            {stats?.district_winners && stats.district_winners.length > 0 ? (
+                                                <div className="overflow-x-auto rounded-xl border border-gray-100">
+                                                    <table className="w-full text-sm text-left">
+                                                        <thead className="text-xs text-gray-500 uppercase bg-gray-50">
+                                                            <tr>
+                                                                <th className="px-4 py-3">District</th>
+                                                                <th className="px-4 py-3">Leading Candidate</th>
+                                                                <th className="px-4 py-3">Party</th>
+                                                                <th className="px-4 py-3 text-right">Votes</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {stats.district_winners.map((winner, idx) => (
+                                                                <tr key={idx} className="bg-white border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-4 py-3 font-bold text-[#1f4a9b]">#{winner.district_id}</td>
+                                                                    <td className="px-4 py-3 font-semibold">{winner.winner_name}</td>
+                                                                    <td className="px-4 py-3">
+                                                                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-100 rounded-lg w-fit text-xs font-bold text-gray-700">
+                                                                            {winner.symbol} {winner.party}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-right font-black text-emerald-600">{winner.votes}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-8 text-gray-400 font-medium">
+                                                    No votes cast yet to determine leaders.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                 </div>
                             </div>
                         )}
@@ -231,6 +377,24 @@ export default function AdminDashboard() {
                         {activeSection === 'voter-status' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                                 <VoterStatusCheck requesterId={user.voter_id} />
+                            </div>
+                        )}
+
+                        {activeSection === 'constituencies' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <ConstituencyManager />
+                            </div>
+                        )}
+
+                        {activeSection === 'notifications' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <NotificationManager />
+                            </div>
+                        )}
+
+                        {activeSection === 'audit' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <AuditTrail />
                             </div>
                         )}
                     </div>

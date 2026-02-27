@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import * as api from '../services/api';
 import { UserPlus, Users, Trash2, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 
-export default function UserManager({ adminId }) {
+export default function UserManager({ admin }) {
+    const adminId = admin?.voter_id;
+    const isAuditor = admin?.role === 'Auditor';
+
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [syncing, setSyncing] = useState(false);
@@ -12,7 +15,7 @@ export default function UserManager({ adminId }) {
         aadhaar: '',
         first_name: '',
         last_name: '',
-        district_id: '',
+        district_id: isAuditor ? admin.district : '',
         voter_id: '',
         role: 'Voter',
         password: '',
@@ -67,7 +70,7 @@ export default function UserManager({ adminId }) {
                 aadhaar: '',
                 first_name: '',
                 last_name: '',
-                district_id: '',
+                district_id: isAuditor ? admin.district : '',
                 voter_id: '',
                 role: 'Voter',
                 password: '',
@@ -106,11 +109,12 @@ export default function UserManager({ adminId }) {
                 </div>
                 <button
                     onClick={handleSync}
-                    disabled={syncing}
-                    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-sm ${syncing
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                            : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-md active:scale-95'
+                    disabled={syncing || isAuditor}
+                    className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-sm ${syncing || isAuditor
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed hidden md:flex opacity-50'
+                        : 'bg-emerald-600 hover:bg-emerald-700 text-white hover:shadow-md active:scale-95'
                         }`}
+                    title={isAuditor ? "Only Admins can run massive dataset syncs." : "Sync from dataset"}
                 >
                     <RefreshCw size={18} className={syncing ? 'animate-spin' : ''} />
                     {syncing ? 'Syncing...' : 'Refresh from Dataset'}
@@ -154,14 +158,14 @@ export default function UserManager({ adminId }) {
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1">
-                                <label className="text-xs font-black text-gray-400 uppercase ml-1">District ID</label>
-                                <input type="text" name="district_id" placeholder="234" value={newUser.district_id} onChange={handleChange} required className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none" />
+                                <label className="text-xs font-black text-gray-400 uppercase ml-1">District ID {isAuditor && '(Locked)'}</label>
+                                <input type="text" name="district_id" placeholder="234" value={newUser.district_id} onChange={handleChange} required disabled={isAuditor} className={`w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none ${isAuditor ? 'text-gray-400 cursor-not-allowed font-bold' : 'text-gray-800'}`} />
                             </div>
                             <div className="space-y-1">
-                                <label className="text-xs font-black text-gray-400 uppercase ml-1">Role</label>
-                                <select name="role" value={newUser.role} onChange={handleChange} className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-gray-800 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none appearance-none cursor-pointer">
+                                <label className="text-xs font-black text-gray-400 uppercase ml-1">Role {isAuditor && '(Locked)'}</label>
+                                <select name="role" value={newUser.role} onChange={handleChange} disabled={isAuditor} className={`w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all outline-none ${isAuditor ? 'text-gray-400 cursor-not-allowed font-bold' : 'text-gray-800 appearance-none cursor-pointer'}`}>
                                     <option value="Voter">Voter</option>
-                                    <option value="Auditor">Auditor</option>
+                                    {!isAuditor && <option value="Auditor">Auditor</option>}
                                 </select>
                             </div>
                         </div>
@@ -208,7 +212,7 @@ export default function UserManager({ adminId }) {
                                             </td>
                                             <td className="px-4 py-4">
                                                 <span className={`px-2 py-1 rounded-md text-[10px] font-black uppercase tracking-tight ${u.role === 'Admin' ? 'bg-purple-50 text-purple-600' :
-                                                        u.role === 'Auditor' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
+                                                    u.role === 'Auditor' ? 'bg-orange-50 text-orange-600' : 'bg-blue-50 text-blue-600'
                                                     }`}>
                                                     {u.role}
                                                 </span>

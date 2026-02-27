@@ -1,8 +1,22 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as api from '../services/api';
+import { Trophy, AlertCircle } from 'lucide-react';
 
 export default function LandingPage() {
     const navigate = useNavigate();
+    const [isActive, setIsActive] = useState(true);
+    const [stats, setStats] = useState(null);
+
+    useEffect(() => {
+        api.getElectionStatus()
+            .then(res => setIsActive(res.data.active))
+            .catch(err => console.error(err));
+
+        api.getStats()
+            .then(res => setStats(res.data))
+            .catch(err => console.error("Failed to load stats", err));
+    }, []);
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col font-sans">
@@ -59,6 +73,45 @@ export default function LandingPage() {
                     className="w-full h-auto object-cover max-h-[400px]"
                 />
             </div>
+
+            {/* Public Election Results (Only visible when election is closed) */}
+            {!isActive && stats?.district_winners && stats.district_winners.length > 0 && (
+                <div className="max-w-6xl mx-auto px-4 mt-8 w-full animate-in fade-in slide-in-from-bottom-4 duration-700">
+                    <div className="bg-white p-6 md:p-8 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-amber-100 flex flex-col md:flex-row gap-8 items-center md:items-start relative overflow-hidden">
+
+                        {/* Left Header */}
+                        <div className="md:w-1/3 text-center md:text-left z-10">
+                            <div className="inline-flex items-center justify-center w-16 h-16 bg-amber-50 text-amber-500 rounded-2xl mb-4 shadow-inner">
+                                <Trophy size={32} />
+                            </div>
+                            <h2 className="text-2xl md:text-3xl font-black text-[#143250] mb-2">Official Results</h2>
+                            <p className="text-gray-500 font-medium text-sm">The election window has closed. The cryptographic tally is complete and verified.</p>
+                        </div>
+
+                        {/* Right Winners List */}
+                        <div className="md:w-2/3 w-full grid grid-cols-1 sm:grid-cols-2 gap-4 z-10">
+                            {stats.district_winners.map((winner, idx) => (
+                                <div key={idx} className="bg-gradient-to-br from-gray-50 to-white p-4 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow relative group">
+                                    <div className="absolute top-0 right-0 p-2 text-gray-200 group-hover:text-amber-100 transition-colors pointer-events-none">
+                                        <Trophy size={64} className="opacity-20" />
+                                    </div>
+                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">District {winner.district_id}</span>
+                                    <h3 className="text-lg font-black text-[#143250] mb-1">{winner.winner_name}</h3>
+                                    <div className="flex flex-wrap items-center gap-2 mt-3">
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-gray-200 rounded-md text-xs font-bold text-gray-600 shadow-sm">
+                                            {winner.symbol} {winner.party}
+                                        </span>
+                                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-xs font-black">
+                                            {winner.votes} Votes
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                    </div>
+                </div>
+            )}
 
             {/* Services Section */}
             <main className="flex-1 max-w-6xl mx-auto px-4 py-12 w-full">

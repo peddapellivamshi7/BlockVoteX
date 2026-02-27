@@ -9,7 +9,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 MASTER_DATA = [
     {"ID": 1, "Aadhaar": "359146283661", "FirstName": "Akash", "LastName": "Singh", "DistrictID": "234", "VoterID": "ABC659753", "Password": "ABC@3661", "Role": "Admin"},
     {"ID": 2, "Aadhaar": "577379407366", "FirstName": "Dipti", "LastName": "Kumar", "DistrictID": "235", "VoterID": "JID563930", "Password": "JID@7366", "Role": "Auditor"},
-    {"ID": 3, "Aadhaar": "782034294038", "FirstName": "Shlok", "LastName": "Agarwal", "DistrictID": "234", "VoterID": "KOF752745", "Password": "KOF@4038", "Role": "Auditor"},
+    {"ID": 3, "Aadhaar": "782034294038", "FirstName": "Shlok", "LastName": "Agarwal", "DistrictID": "234", "VoterID": "K52745OF7", "Password": "KOF@4038", "Role": "Auditor"},
     {"ID": 4, "Aadhaar": "616950285641", "FirstName": "Rashid", "LastName": "Khan", "DistrictID": "235", "VoterID": "KFL505615", "Password": "KFL@5641", "Role": "Voter"},
     {"ID": 5, "Aadhaar": "736741666818", "FirstName": "Nicole", "LastName": "Dias", "DistrictID": "234", "VoterID": "OKF618375", "Password": "OKF@6818", "Role": "Voter"}
 ]
@@ -235,6 +235,21 @@ def init_db():
                     party_name TEXT,
                     party_symbol TEXT,
                     district_id TEXT
+                )''')
+
+    # 8. Constituencies (Districts)
+    c.execute('''CREATE TABLE IF NOT EXISTS constituencies (
+                    district_id TEXT PRIMARY KEY,
+                    region_name TEXT
+                )''')
+
+    # 9. Notifications (Banners)
+    c.execute('''CREATE TABLE IF NOT EXISTS notifications (
+                    id ''' + ("SERIAL" if DATABASE_URL else "INTEGER PRIMARY KEY AUTOINCREMENT") + ''',
+                    ''' + ("PRIMARY KEY (id)," if DATABASE_URL else "") + '''
+                    message TEXT,
+                    is_active BOOLEAN DEFAULT ''' + ("TRUE" if DATABASE_URL else "1") + ''',
+                    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )''')
 
     conn.commit()

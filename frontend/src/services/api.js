@@ -23,8 +23,8 @@ export const getBlockchain = () => api.get('/blockchain');
 export const getLogs = () => api.get('/logs');
 export const getRepresentatives = () => api.get('/representatives');
 export const getRepresentativesByDistrict = (districtId) => api.get(`/representatives/${districtId}`);
-export const addRepresentative = (data) => api.post('/representatives', data);
-export const deleteRepresentative = (id) => api.delete(`/representatives/${id}`);
+export const addRepresentative = (data, adminId) => api.post('/representatives', data, { params: { admin_id: adminId } });
+export const deleteRepresentative = (id, adminId) => api.delete(`/representatives/${id}`, { params: { admin_id: adminId } });
 export const getManagedUsers = (adminId) => api.get('/admin/users', { params: { admin_id: adminId } });
 export const addManagedUser = (data) => api.post('/admin/users', data);
 export const deleteManagedUser = (adminId, voterId) =>
@@ -32,5 +32,16 @@ export const deleteManagedUser = (adminId, voterId) =>
 export const syncDataset = (adminId) => api.post('/admin/sync-dataset', null, { params: { admin_id: adminId } });
 export const getVoterStatus = (identifier, requesterId) =>
     api.get(`/admin/voter-status/${identifier}`, { params: { requester_id: requesterId } });
+
+export const getConstituencies = () => api.get('/admin/constituencies');
+export const addConstituency = (data) => api.post('/admin/constituencies', data);
+export const deleteConstituency = (id) => api.delete(`/admin/constituencies/${id}`);
+
+export const getActiveNotification = () => api.get('/notifications/active');
+export const createNotification = (data) => api.post('/admin/notifications', data);
+export const clearNotifications = () => api.delete('/admin/notifications');
+
+export const getVoterReceipt = (voterId) => api.get(`/voter/${voterId}/receipt`);
+export const verifyBlockHash = (hash) => api.get(`/blockchain/verify/${hash}`);
 
 export default api;

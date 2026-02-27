@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
-import api, { voteOptions, voteVerify, generateOtp, getElectionStatus, getRepresentatives } from '../services/api';
+import * as api from '../services/api';
 import { useNavigate } from 'react-router-dom';
-import { LogOut, CheckCircle, Vote, Fingerprint, Camera, RefreshCw, Lock, AlertCircle, Send } from 'lucide-react';
+import { LogOut, CheckCircle, Vote, Fingerprint, Camera, RefreshCw, Lock, AlertCircle, Send, Trophy, Bell } from 'lucide-react';
 import Webcam from 'react-webcam';
 import UserProfile from '../components/UserProfile';
 
@@ -19,6 +19,9 @@ export default function VoterDashboard() {
     const [otp, setOtp] = useState('');
     const [showOtpModal, setShowOtpModal] = useState(false);
     const [webauthnData, setWebauthnData] = useState(null);
+    const [stats, setStats] = useState(null);
+    const [activeNotification, setActiveNotification] = useState(null);
+    const [receipt, setReceipt] = useState(null);
     const navigate = useNavigate();
     const webcamRef = useRef(null);
 
@@ -26,15 +29,38 @@ export default function VoterDashboard() {
         if (!user) { navigate('/login'); return; }
 
         // 1. Check Election Status
-        getElectionStatus().then(res => setIsActive(res.data.active));
+        api.getElectionStatus().then(res => setIsActive(res.data.active));
+
+        // Fetch overall stats for district winners
+        api.getStats().then(res => setStats(res.data)).catch(err => console.error("Failed to load stats", err));
 
         // 2. Fetch Candidates for District
-        getRepresentatives(user.district)
+        api.getRepresentatives(user.district)
             .then(res => {
                 const districtCandidates = res.data.filter(c => c.district_id === user.district);
-                setCandidates(districtCandidates.length > 0 ? districtCandidates : res.data);
+                const finalCandidates = [...(districtCandidates.length > 0 ? districtCandidates : res.data)];
+                finalCandidates.push({
+                    representative_id: 'NOTA',
+                    name: 'None of the Above',
+                    party_name: 'NOTA',
+                    party_symbol: '🚫',
+                    district_id: user.district
+                });
+                setCandidates(finalCandidates);
             })
             .catch(err => console.error("Failed to load candidates", err));
+
+        // 3. Fetch Active Notification
+        api.getActiveNotification()
+            .then(res => setActiveNotification(res.data.message))
+            .catch(err => console.error("Failed to load notifications", err));
+
+        // 4. Fetch Receipt if voted
+        if (user.has_voted) {
+            api.getVoterReceipt(user.voter_id)
+                .then(res => setReceipt(res.data))
+                .catch(err => console.error("Failed to load receipt", err));
+        }
 
     }, []);
 
@@ -58,7 +84,7 @@ export default function VoterDashboard() {
             const candidate = candidates.find(c => c.representative_id === selectedParty);
             if (!candidate) return;
 
-            const { data: options } = await voteOptions({
+            const { data: options } = await api.voteOptions({
                 voter_id: user.voter_id,
                 aadhaar: user.aadhaar_masked || ""
             });
@@ -75,7 +101,7 @@ export default function VoterDashboard() {
             }
 
             setWebauthnData(authenticationResponse);
-            await generateOtp({ voter_id: user.voter_id });
+            await api.generateOtp({ voter_id: user.voter_id });
             setShowOtpModal(true);
 
         } catch (err) {
@@ -89,10 +115,10 @@ export default function VoterDashboard() {
             setError('');
             const candidate = candidates.find(c => c.representative_id === selectedParty);
 
-            const res = await voteVerify({
+            const res = await api.voteVerify({
                 voter_id: user.voter_id,
                 district_id: user.district,
-                party_id: candidate.party_name,
+                party_id: candidate.representative_id,
                 face_image: faceImage,
                 authentication_response: webauthnData,
                 otp: otp
@@ -141,11 +167,105 @@ export default function VoterDashboard() {
                     </div>
                     <h1 className="text-3xl font-black text-[#143250] mb-4">Election Inactive</h1>
                     <p className="text-gray-500 mb-8 font-medium">The election window is currently closed. Please wait for an official announcement.</p>
+
+                    {stats?.district_winners && stats.district_winners.length > 0 && (
+                        <div className="mb-8 text-left bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <h3 className="text-lg font-bold text-[#143250] mb-4 flex items-center gap-2 justify-center">
+                                <Trophy className="text-amber-500" size={20} /> Official Election Results
+                            </h3>
+                            <div className="space-y-3">
+                                {stats.district_winners.map((winner, idx) => (
+                                    <div key={idx} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center group hover:border-[#143250] transition-colors">
+                                        <div>
+                                            <span className="text-xs font-bold text-gray-400 block mb-0.5">District {winner.district_id}</span>
+                                            <span className="font-bold text-[#143250]">{winner.winner_name}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="flex items-center gap-1.5 px-2 bg-gray-50 rounded-md text-xs font-bold text-gray-600 border border-gray-100 mb-1">
+                                                {winner.symbol} {winner.party}
+                                            </span>
+                                            <span className="text-sm font-black text-emerald-600 block">{winner.votes} Votes</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <button
                         onClick={handleLogout}
                         className="w-full py-4 bg-gray-100 text-gray-700 rounded-xl font-black hover:bg-gray-200 transition-colors"
                     >
                         Logout
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
+    if (user?.has_voted && !voteSuccess) {
+        return (
+            <div className="min-h-screen bg-[#f0f2f5] flex flex-col items-center justify-center p-4 font-sans">
+                <div className="bg-white p-8 md:p-12 rounded-3xl shadow-xl border border-gray-100 max-w-lg w-full">
+                    <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <CheckCircle size={36} className="text-blue-600" />
+                    </div>
+                    <div className="text-center mb-8">
+                        <h1 className="text-2xl font-black text-[#143250] mb-2">Digital Voting Receipt</h1>
+                        <p className="text-sm text-gray-500 font-medium">Your ballot has been securely recorded on the immutable blockchain ledger. You cannot vote again.</p>
+                    </div>
+
+                    {receipt && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 mb-8 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 p-4 opacity-5">
+                                <Lock size={120} />
+                            </div>
+                            <div className="relative z-10 space-y-4">
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Time of Vote</p>
+                                    <p className="font-bold text-slate-800 font-mono text-sm">{new Date(receipt.timestamp).toLocaleString()}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Constituency</p>
+                                    <p className="font-bold text-slate-800 text-sm">District #{receipt.district_id}</p>
+                                </div>
+                                <div>
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Cryptographic Hash</p>
+                                    <p className="font-bold text-emerald-600 font-mono text-xs break-all bg-emerald-50 p-2 rounded border border-emerald-100">{receipt.block_hash}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {stats?.district_winners && stats.district_winners.length > 0 && !isActive && (
+                        <div className="mb-8 text-left bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                            <h3 className="text-lg font-bold text-[#143250] mb-4 flex items-center gap-2 justify-center">
+                                <Trophy className="text-amber-500" size={20} /> Official Election Results
+                            </h3>
+                            <div className="space-y-3">
+                                {stats.district_winners.map((winner, idx) => (
+                                    <div key={idx} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex justify-between items-center group hover:border-[#143250] transition-colors">
+                                        <div>
+                                            <span className="text-xs font-bold text-gray-400 block mb-0.5">District {winner.district_id}</span>
+                                            <span className="font-bold text-[#143250]">{winner.winner_name}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="flex items-center gap-1.5 px-2 bg-gray-50 rounded-md text-xs font-bold text-gray-600 border border-gray-100 mb-1">
+                                                {winner.symbol} {winner.party}
+                                            </span>
+                                            <span className="text-sm font-black text-emerald-600 block">{winner.votes} Votes</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleLogout}
+                        className="w-full py-4 bg-gradient-to-r from-[#143250] to-[#1f4a9b] text-white rounded-xl shadow-lg font-black hover:opacity-90 transition-opacity"
+                    >
+                        Logout Securely
                     </button>
                 </div>
             </div>
@@ -192,6 +312,19 @@ export default function VoterDashboard() {
                     </div>
                 </div>
             </header>
+
+            {/* Live Notification Banner */}
+            {activeNotification && (
+                <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-900 p-4 mt-6 max-w-5xl mx-auto rounded-r-xl shadow-sm flex items-center gap-4 animate-in slide-in-from-top-4 relative z-30">
+                    <div className="bg-amber-200 p-2 rounded-lg text-amber-600">
+                        <Bell size={20} className="animate-pulse" />
+                    </div>
+                    <div>
+                        <p className="font-black text-xs uppercase tracking-wider text-amber-600 mb-0.5">Official Announcement</p>
+                        <p className="font-bold text-sm leading-snug">{activeNotification}</p>
+                    </div>
+                </div>
+            )}
 
             {/* Hero Banner Image */}
             <div className="w-full relative shadow-sm mb-8">

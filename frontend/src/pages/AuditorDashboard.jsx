@@ -1,20 +1,38 @@
 import React, { useEffect, useState } from 'react';
 import * as api from '../services/api';
-import { Play, Square, LogOut, Activity, Vote, ShieldCheck, List, AlertCircle, Search, User as UserIcon, Settings } from 'lucide-react';
+import { Play, Square, LogOut, Activity, Vote, ShieldCheck, List, AlertCircle, Search, User as UserIcon, Settings, Trophy, BarChart3, Users } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import RepresentativeManager from '../components/RepresentativeManager';
 import UserProfile from '../components/UserProfile';
 import VoterStatusCheck from '../components/VoterStatusCheck';
+import UserManager from '../components/UserManager';
 
 export default function AuditorDashboard() {
     const [user] = useState(() => JSON.parse(localStorage.getItem('user') || '{}'));
     const [isActive, setIsActive] = useState(false);
+    const [stats, setStats] = useState(null);
     const [activeSection, setActiveSection] = useState(null);
     const navigate = useNavigate();
 
     useEffect(() => {
         checkStatus();
+        fetchStats();
+        // optionally refresh stats every 5s if they leave the dashboard open
+        const interval = setInterval(() => {
+            fetchStats();
+            checkStatus();
+        }, 5000);
+        return () => clearInterval(interval);
     }, []);
+
+    const fetchStats = async () => {
+        try {
+            const res = await api.getStats();
+            setStats(res.data);
+        } catch (e) {
+            console.error(e);
+        }
+    };
 
     const checkStatus = async () => {
         try {
@@ -126,6 +144,16 @@ export default function AuditorDashboard() {
                         </div>
                     </button>
 
+                    <button onClick={() => setActiveSection('users')} className={`p-4 md:p-6 rounded-2xl shadow-sm border transition-all duration-300 hover:scale-105 hover:shadow-md group flex flex-col items-center gap-3 ${activeSection === 'users' ? 'bg-white ring-2 ring-purple-500 border-purple-100 shadow-md' : 'bg-white border-gray-100'}`}>
+                        <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-colors ${activeSection === 'users' ? 'bg-purple-600 text-white' : 'bg-purple-50 text-purple-600 group-hover:bg-purple-600 group-hover:text-white'}`}>
+                            <Users size={20} />
+                        </div>
+                        <div className="text-center">
+                            <h3 className="font-black text-[#143250] text-sm md:text-base">User Management</h3>
+                            <p className="hidden md:block text-[10px] text-gray-500 font-medium tracking-tight">Manage voters</p>
+                        </div>
+                    </button>
+
                     <button onClick={() => setActiveSection('reps')} className={`p-4 md:p-6 rounded-2xl shadow-sm border transition-all duration-300 hover:scale-105 hover:shadow-md group flex flex-col items-center gap-3 ${activeSection === 'reps' ? 'bg-white ring-2 ring-orange-500 border-orange-100 shadow-md' : 'bg-white border-gray-100'}`}>
                         <div className={`w-10 h-10 md:w-12 md:h-12 rounded-xl flex items-center justify-center transition-colors ${activeSection === 'reps' ? 'bg-orange-600 text-white' : 'bg-orange-50 text-orange-600 group-hover:bg-orange-600 group-hover:text-white'}`}>
                             <List size={20} />
@@ -198,6 +226,68 @@ export default function AuditorDashboard() {
                                         </button>
                                     </div>
                                 </div>
+
+                                {/* Results Grid for Auditors */}
+                                <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="md:col-span-1 bg-[#143250] text-white p-6 rounded-3xl shadow-sm relative overflow-hidden">
+                                        <h3 className="text-lg font-bold mb-4 flex items-center gap-2 z-10 relative"><BarChart3 size={18} className="text-blue-400" /> System Metrics</h3>
+                                        <div className="space-y-4 z-10 relative">
+                                            <div className="bg-white/10 p-4 rounded-xl border border-white/5">
+                                                <p className="text-xs text-blue-200 uppercase font-black">Registered</p>
+                                                <p className="text-2xl font-bold">{stats?.total_users || 0}</p>
+                                            </div>
+                                            <div className="bg-white/10 p-4 rounded-xl border border-white/5">
+                                                <p className="text-xs text-emerald-200 uppercase font-black">Votes</p>
+                                                <p className="text-2xl font-bold">{stats?.voted_users || 0}</p>
+                                            </div>
+                                        </div>
+                                        <div className="absolute -right-4 -bottom-4 text-white/5 rotate-12">
+                                            <Activity size={120} />
+                                        </div>
+                                    </div>
+
+                                    {/* District Leaders (Only visible when election is stopped) */}
+                                    {!isActive && (
+                                        <div className="md:col-span-2 bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100">
+                                            <h3 className="text-lg font-bold text-[#143250] mb-6 flex items-center gap-2">
+                                                <Trophy className="text-amber-500" size={20} /> District Leaders
+                                            </h3>
+
+                                            {stats?.district_winners && stats.district_winners.filter(w => w.district_id === user.district).length > 0 ? (
+                                                <div className="overflow-x-auto rounded-xl border border-gray-100">
+                                                    <table className="w-full text-sm text-left">
+                                                        <thead className="text-[10px] text-gray-500 uppercase bg-gray-50 font-black tracking-widest border-b border-gray-100">
+                                                            <tr>
+                                                                <th className="px-4 py-3">Dist.</th>
+                                                                <th className="px-4 py-3">Candidate</th>
+                                                                <th className="px-4 py-3">Party</th>
+                                                                <th className="px-4 py-3 text-right">Votes</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody className="divide-y divide-gray-50">
+                                                            {stats.district_winners.filter(w => w.district_id === user.district).map((winner, idx) => (
+                                                                <tr key={idx} className="bg-white hover:bg-gray-50 transition-colors">
+                                                                    <td className="px-4 py-3 font-bold text-gray-400">#{winner.district_id}</td>
+                                                                    <td className="px-4 py-3 font-bold text-[#143250]">{winner.winner_name}</td>
+                                                                    <td className="px-4 py-3">
+                                                                        <span className="flex items-center gap-1.5 px-2 bg-white border border-gray-100 rounded-md w-fit text-xs font-bold text-gray-600 shadow-sm">
+                                                                            {winner.symbol} {winner.party}
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="px-4 py-3 text-right font-black text-emerald-600 border-l border-gray-50 bg-emerald-50/10">{winner.votes}</td>
+                                                                </tr>
+                                                            ))}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-12 text-gray-400 font-medium bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+                                                    Voting data is currently insufficient.
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
@@ -207,9 +297,15 @@ export default function AuditorDashboard() {
                             </div>
                         )}
 
+                        {activeSection === 'users' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                                <UserManager admin={user} />
+                            </div>
+                        )}
+
                         {activeSection === 'reps' && (
                             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                <RepresentativeManager />
+                                <RepresentativeManager admin={user} />
                             </div>
                         )}
                     </div>
